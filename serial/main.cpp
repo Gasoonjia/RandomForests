@@ -5,6 +5,20 @@
 #define FEATURE 784
 #define NUMBER_OF_CLASSES 10
 
+
+/*************************************************************
+	*treeNum:	the number of trees in this forest
+	*maxDepth:	the max Depth of one single tree
+	*minLeafSample: terminate criterion,the min samples in a leaf              
+	*minInfoGain: terminate criterion,the min information
+	*             gain in a node if it can be splitted
+	**************************************************************/
+#define TREE_NUM 100
+#define MAX_DEPTH 10
+#define MIN_LEAF_SAMPLE 10
+#define MIN_INFO_GAIN 0
+#define IS_REGRESSION false
+
 int main(int argc, const char * argv[])
 {
     //1. prepare data
@@ -31,11 +45,11 @@ int main(int argc, const char * argv[])
 //		"/Users/xinling/PycharmProjects/MNIST_data/t10k-labels-idx1-ubyte");
     
     //2. create RandomForest class and set some parameters
-	RandomForest randomForest(100,10,10,0);
+	RandomForest randomForest(TREE_NUM, MAX_DEPTH, MIN_LEAF_SAMPLE, MIN_INFO_GAIN);
     
 	//3. start to train RandomForest
 //	randomForest.train(trainset,trainlabels,TRAIN_NUM,FEATURE,10,true,56);//regression
-    randomForest.train(trainset,trainlabels,TRAIN_NUM,FEATURE,10,false);//classification
+    randomForest.train(trainset,trainlabels, TRAIN_NUM, FEATURE, NUMBER_OF_CLASSES, IS_REGRESSION);//classification
 	
     //restore model from file and save model to file
 //	randomForest.saveModel("E:\\RandomForest2.Model");
