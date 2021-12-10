@@ -7,7 +7,7 @@ LIBRARY_DIRS := /usr/local/lib
 LDFLAGS := $(foreach librarydir, $(LIBRARY_DIRS),-L$(librarydir)) $(PKG_CONFIG) \
 $(foreach library,$(LIBRARIES),-l$(library))
 COMMON_FLAGS := $(foreach includedir, $(INCLUDE_DIRS), -I$(includedir))
-CXXFLAGS := -g $(COMMON_FLAGS)
+CXXFLAGS := -g $(COMMON_FLAGS) -I. -O3 -Wall -fopenmp -Wno-unknown-pragmas -mavx2
 
 RandomForests : $(objects)
 	g++ -o RandomForests $(objects) $(CXXFLAGS) $(LDFLAGS)

@@ -1,23 +1,11 @@
+#include <sys/time.h>
+#include <omp.h>
 #include"RandomForest.h"
 #include"MnistPreProcess.h"
 #define TRAIN_NUM 60000
 #define TEST_NUM 10000
 #define FEATURE 784
 #define NUMBER_OF_CLASSES 10
-
-
-/*************************************************************
-	*treeNum:	the number of trees in this forest
-	*maxDepth:	the max Depth of one single tree
-	*minLeafSample: terminate criterion,the min samples in a leaf              
-	*minInfoGain: terminate criterion,the min information
-	*             gain in a node if it can be splitted
-	**************************************************************/
-#define TREE_NUM 100
-#define MAX_DEPTH 10
-#define MIN_LEAF_SAMPLE 10
-#define MIN_INFO_GAIN 0
-#define IS_REGRESSION false
 
 int main(int argc, const char * argv[])
 {
@@ -45,12 +33,21 @@ int main(int argc, const char * argv[])
 //		"/Users/xinling/PycharmProjects/MNIST_data/t10k-labels-idx1-ubyte");
     
     //2. create RandomForest class and set some parameters
-	RandomForest randomForest(TREE_NUM, MAX_DEPTH, MIN_LEAF_SAMPLE, MIN_INFO_GAIN);
+	RandomForest randomForest(8,10,10,0);
     
 	//3. start to train RandomForest
 //	randomForest.train(trainset,trainlabels,TRAIN_NUM,FEATURE,10,true,56);//regression
-    randomForest.train(trainset,trainlabels, TRAIN_NUM, FEATURE, NUMBER_OF_CLASSES, IS_REGRESSION);//classification
-	
+
+	struct timeval starttime;
+	struct timeval stoptime;
+	gettimeofday(&starttime, NULL);
+	omp_set_num_threads(8);
+    randomForest.train(trainset,trainlabels,TRAIN_NUM,FEATURE,10,false);//classification
+	gettimeofday(&stoptime, NULL);
+	double elapsedTime;
+	elapsedTime = (stoptime.tv_sec - starttime.tv_sec) * 1000.0;      // sec to ms
+    elapsedTime += (stoptime.tv_usec - starttime.tv_usec) / 1000.0;   // us to ms
+	printf("%f ms.\n", elapsedTime);
     //restore model from file and save model to file
 //	randomForest.saveModel("E:\\RandomForest2.Model");
 //	randomForest.readModel("E:\\RandomForest.Model");

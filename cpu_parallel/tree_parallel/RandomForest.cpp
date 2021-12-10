@@ -1,4 +1,7 @@
 #include"RandomForest.h"
+#include <omp.h>
+#include <vector>
+using namespace std;
 
 RandomForest::RandomForest(int treeNum,int maxDepth,int minLeafSample,float minInfoGain)
 {
@@ -101,6 +104,47 @@ void RandomForest::train(float**trainset,float*labels,int SampleNum,int featureN
 	srand(static_cast<unsigned int>(time(NULL)));
 	int*_sampleIndex=new int[_trainSampleNum];
 	//start to train every tree in the forest
+	
+
+	// Sample **samples = new Sample*[_treeNum];
+	// #pragma omp parallel for
+	// for(int treeId=0; treeId<_treeNum; treeId++){
+	// 	//random sampling from trainset
+	// 	samples[treeId] = new Sample(_trainSample);
+	// 	samples[treeId]->randomSelectSample(_sampleIndex, _trainSampleNum, _trainSampleNum);
+	// }
+
+	
+	// int currentLevel = 0;
+	// int currentLengthPerTree = 1;
+	// int previousNodeNum = 0;
+	// while(currentLevel < _maxDepth){
+	// 	printf("currentLevel: %d\n", currentLevel);
+	// 	if(currentLevel == 0){
+	// 		#pragma omp parallel for
+	// 		for(int i=0; i<_treeNum; i++){
+	// 			_forest[i]->setup(samples[i]);
+	// 		}
+	// 	}
+	// 	#pragma omp parallel for
+	// 	for(int i=0; i<_treeNum*currentLengthPerTree; i++){
+	// 		int treeId = i/currentLengthPerTree;
+	// 		int nodeIdx = previousNodeNum + (i%currentLengthPerTree);
+	// 		_forest[treeId]->splitNode(samples[treeId], nodeIdx);
+	// 	}
+	// 	currentLevel++;
+	// 	previousNodeNum += currentLengthPerTree;
+	// 	currentLengthPerTree += currentLengthPerTree;
+	// }
+
+	// for(int treeId=0; treeId<_treeNum; treeId++){
+	// 	delete samples[treeId];
+	// }
+	// delete[] samples;
+	// delete[] _sampleIndex;
+	// _sampleIndex = NULL;
+
+	#pragma omp parallel for
 	for(int i=0;i<_treeNum;++i)
 	{
 		printf("train the %d th tree...\n",i);

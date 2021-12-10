@@ -29,6 +29,24 @@ void Node::sortIndex(int featureId)
 	delete[] pairs;
 }
 
+int* Node::sortIndex2(int featureId)
+{
+	float**data=_samples->_dataset;
+	int*sampleId=new int[_samples->getSelectedSampleNum()];
+	memcpy(sampleId, _samples->getSampleIndex(), _samples->getSelectedSampleNum()*sizeof(int));
+	Pair*pairs=new Pair[_samples->getSelectedSampleNum()];
+	for(int i=0;i<_samples->getSelectedSampleNum();++i)
+	{
+		pairs[i].id=sampleId[i];
+		pairs[i].feature=data[sampleId[i]][featureId];
+	}
+	qsort(pairs,_samples->getSelectedSampleNum(),sizeof(Pair),compare_pair);
+	for(int i=0;i<_samples->getSelectedSampleNum();++i)
+	{sampleId[i]=pairs[i].id;}
+	delete[] pairs;
+	return sampleId;
+}
+
 int compare_pair( const void* a, const void* b ) 
 {
    Pair* arg1 = (Pair*) a;
@@ -79,7 +97,7 @@ void ClasNode::calculateInfoGain(Node**nodeArray,int id,float minInfoGain)
 {
 	//some used variables
 	int i=0,j=0,k=0;
-	int*sampleId=_samples->getSampleIndex();
+	//int*sampleId=_samples->getSampleIndex();
 	int*featureId=_samples->getFeatureIndex();
 	float**data=_samples->_dataset;
 	float*labels=_samples->_labels;
@@ -101,44 +119,55 @@ void ClasNode::calculateInfoGain(Node**nodeArray,int id,float minInfoGain)
 		maxProbsRight[i]=0;
 	}
 	//the params need to store in first loop
-	float fMaxinfoGain=0;
-	int fMaxFeatureId=0;
-	float fMaxThreshold=0;
-	float fMaxGiniLeft=0;
-	float fMaxGiniRight=0;
-	int fMaxSamplesOnLeft=0;
-	float*fMaxProbsLeft=new float[classNum];
-	float*fMaxProbsRight=new float[classNum];
-	//the temp params in inner loop
-	float giniLeft=0,giniRight=0,infoGain=0;
-	float*probsLeft=new float[classNum];
-	float*probsRight=new float[classNum];
-	for(i=0;i<featureNum;++i)  //for every dimension
-	{
-		//sort the samples according to the current feature
-		//this means only exchange the position of the index
-		//in sampleIndex.the trainset and labels never change
-		fMaxinfoGain=0;
-		fMaxFeatureId=featureId[i];
-		fMaxGiniLeft=0;
-		fMaxGiniRight=0;
-		fMaxThreshold=0;
-		fMaxSamplesOnLeft=0;
-		for(j=0;j<classNum;++j)
+	// float fMaxinfoGain=0;
+	// int fMaxFeatureId=0;
+	// float fMaxThreshold=0;
+	// float fMaxGiniLeft=0;
+	// float fMaxGiniRight=0;
+	// int fMaxSamplesOnLeft=0;
+
+	/////2hao Added/////////
+	float *fMaxinfoGains = new float[featureNum];
+	int *fMaxFeatureIds = new int[featureNum];
+	float *fMaxThresholds = new float[featureNum];
+	float *fMaxGiniLefts = new float[featureNum];
+	float *fMaxGiniRights = new float[featureNum];
+	int *fMaxSamplesOnLefts = new int[featureNum];
+
+	float **fMaxProbsLefts = new float*[featureNum];
+	float **fMaxProbsRights = new float*[featureNum];
+
+	#pragma omp parallel for schedule(dynamic)
+	for(int i=0; i<featureNum; ++i){
+		//the temp params in inner loop
+		float giniLeft=0,giniRight=0,infoGain=0;
+		float*probsLeft=new float[classNum];
+		float*probsRight=new float[classNum];
+
+		fMaxinfoGains[i]=0;
+		fMaxFeatureIds[i]=featureId[i];
+		fMaxGiniLefts[i]=0;
+		fMaxGiniRights[i]=0;
+		fMaxThresholds[i]=0;
+		fMaxSamplesOnLefts[i]=0;
+
+		fMaxProbsLefts[i] = new float[classNum];
+		fMaxProbsRights[i] = new float[classNum];
+		for(int j=0;j<classNum;++j)
 		{
-			fMaxProbsLeft[j]=0;
-			fMaxProbsRight[j]=0;
+			fMaxProbsLefts[i][j]=0;
+			fMaxProbsRights[i][j]=0;
 		}
         //sort samples by current feature
-		sortIndex(featureId[i]);
+		int *sampleId = sortIndex2(featureId[i]);
 		//initialize the probsLeft&probsRight
-		for(k=0;k<classNum;++k)
+		for(int k=0;k<classNum;++k)
 		{
 			probsLeft[k]=0;
 			probsRight[k]=0;
 		}
 		memcpy(probsRight,_probs,sizeof(float)*classNum);
-		for(j=0;j<sampleNum-1;++j)
+		for(int j=0;j<sampleNum-1;++j)
 		{
 			giniLeft=0;
 			giniRight=0;
@@ -148,13 +177,13 @@ void ClasNode::calculateInfoGain(Node**nodeArray,int id,float minInfoGain)
             //do not do calculation if the nearby samples' feature are too similar(<0.000001)
 			if((data[sampleId[j+1]][featureId[i]]-data[sampleId[j]][featureId[i]])<0.000001)
 			{continue;}
-			for(k=0;k<classNum;++k)
+			for(int k=0;k<classNum;++k)
 			{
 				float p=probsLeft[k]/(j+1);
 				giniLeft+=(p*p);
 			}
 			giniLeft=1-giniLeft;
-			for(k=0;k<classNum;++k)
+			for(int k=0;k<classNum;++k)
 			{
 				float p=probsRight[k]/(sampleNum-j-1);
 				giniRight+=(p*p);
@@ -163,54 +192,176 @@ void ClasNode::calculateInfoGain(Node**nodeArray,int id,float minInfoGain)
 			float leftRatio=(j+1.0)/sampleNum;
 			float rightRatio=(sampleNum-j-1.0)/sampleNum;
 			infoGain=_gini-leftRatio*giniLeft-rightRatio*giniRight;
-			if(infoGain>fMaxinfoGain)
+			if(infoGain>fMaxinfoGains[i])
 			{
-				fMaxinfoGain=infoGain;
-				fMaxGiniLeft=giniLeft;
-				fMaxGiniRight=giniRight;
-				fMaxThreshold=(data[sampleId[j]][featureId[i]]+data[sampleId[j+1]][featureId[i]])/2;
-				fMaxSamplesOnLeft=j;
-				memcpy(fMaxProbsLeft,probsLeft,sizeof(float)*classNum);
-				memcpy(fMaxProbsRight,probsRight,sizeof(float)*classNum);
+				fMaxinfoGains[i]=infoGain;
+				fMaxGiniLefts[i]=giniLeft;
+				fMaxGiniRights[i]=giniRight;
+				fMaxThresholds[i]=(data[sampleId[j]][featureId[i]]+data[sampleId[j+1]][featureId[i]])/2;
+				fMaxSamplesOnLefts[i]=j;
+				memcpy(fMaxProbsLefts[i],probsLeft,sizeof(float)*classNum);
+				memcpy(fMaxProbsRights[i],probsRight,sizeof(float)*classNum);
 			}
 		}
-		if(fMaxinfoGain>maxInfoGain)
-		{
-			maxInfoGain=fMaxinfoGain;
-			maxGiniLeft=fMaxGiniLeft;
-			maxGiniRight=fMaxGiniRight;
-			maxFeatureId=fMaxFeatureId;
-			maxThreshold=fMaxThreshold;
-			maxSamplesOnLeft=fMaxSamplesOnLeft;
-			memcpy(maxProbsLeft,fMaxProbsLeft,sizeof(float)*classNum);
-			memcpy(maxProbsRight,fMaxProbsRight,sizeof(float)*classNum);
+		delete[] sampleId;
+		delete[] probsLeft;
+		delete[] probsRight;
+	}
+
+	for(int i=0; i<featureNum; i++){
+		if(fMaxinfoGains[i] > maxInfoGain){
+			maxInfoGain=fMaxinfoGains[i];
+	 		maxGiniLeft=fMaxGiniLefts[i];
+	 		maxGiniRight=fMaxGiniRights[i];
+	 		maxFeatureId=fMaxFeatureIds[i];
+	 		maxThreshold=fMaxThresholds[i];
+	 		maxSamplesOnLeft=fMaxSamplesOnLefts[i];
+	 		memcpy(maxProbsLeft,fMaxProbsLefts[i],sizeof(float)*classNum);
+	 		memcpy(maxProbsRight,fMaxProbsRights[i],sizeof(float)*classNum);
 		}
 	}
 	sortIndex(maxFeatureId);
-	if(maxInfoGain<minInfoGain)
-	{createLeaf();}
+	if(maxInfoGain < minInfoGain){
+		createLeaf();
+	}
 	else
 	{
 		_featureIndex=maxFeatureId;
-		_threshold=maxThreshold;
-		nodeArray[id*2+1]=new ClasNode();
-		nodeArray[id*2+2]=new ClasNode();
-		((ClasNode*)nodeArray[id*2+1])->_gini=maxGiniLeft;
-		((ClasNode*)nodeArray[id*2+1])->_probs=maxProbsLeft;
-		((ClasNode*)nodeArray[id*2+2])->_gini=maxGiniRight;
-		((ClasNode*)nodeArray[id*2+2])->_probs=maxProbsRight;
-		//assign samples to left and right
-		Sample*leftSamples=new Sample(_samples,0,maxSamplesOnLeft);
-		Sample*rightSamples=new Sample(_samples,maxSamplesOnLeft+1,sampleNum-1);
-		nodeArray[id*2+1]->_samples=leftSamples;
-		nodeArray[id*2+2]->_samples=rightSamples;
+	 	_threshold=maxThreshold;
+	 	nodeArray[id*2+1]=new ClasNode();
+	 	nodeArray[id*2+2]=new ClasNode();
+	 	((ClasNode*)nodeArray[id*2+1])->_gini=maxGiniLeft;
+	 	((ClasNode*)nodeArray[id*2+1])->_probs=maxProbsLeft;
+	 	((ClasNode*)nodeArray[id*2+2])->_gini=maxGiniRight;
+	 	((ClasNode*)nodeArray[id*2+2])->_probs=maxProbsRight;
+	 	//assign samples to left and right
+	 	Sample*leftSamples=new Sample(_samples,0,maxSamplesOnLeft);
+	 	Sample*rightSamples=new Sample(_samples,maxSamplesOnLeft+1,sampleNum-1);
+	 	nodeArray[id*2+1]->_samples=leftSamples;
+	 	nodeArray[id*2+2]->_samples=rightSamples;
 	}
 	delete[] _probs;
 	_probs=NULL;
-	delete[] fMaxProbsLeft;
-	delete[] fMaxProbsRight;
-	delete[] probsLeft;
-	delete[] probsRight;
+	for(int i=0; i<featureNum; i++){
+		delete[] fMaxProbsLefts[i];
+		delete[] fMaxProbsRights[i];
+	}
+	delete[] fMaxProbsLefts;
+	delete[] fMaxProbsRights;
+
+	delete[] fMaxinfoGains;
+	delete[] fMaxFeatureIds;
+	delete[] fMaxThresholds;
+	delete[] fMaxGiniLefts;
+	delete[] fMaxGiniRights;
+	delete[] fMaxSamplesOnLefts;
+
+	////////////////////////////
+
+	// float*fMaxProbsLeft=new float[classNum];
+	// float*fMaxProbsRight=new float[classNum];
+	// //the temp params in inner loop
+	// float giniLeft=0,giniRight=0,infoGain=0;
+	// float*probsLeft=new float[classNum];
+	// float*probsRight=new float[classNum];
+	// for(i=0;i<featureNum;++i)  //for every dimension
+	// {
+	// 	//sort the samples according to the current feature
+	// 	//this means only exchange the position of the index
+	// 	//in sampleIndex.the trainset and labels never change
+	// 	fMaxinfoGain=0;
+	// 	fMaxFeatureId=featureId[i];
+	// 	fMaxGiniLeft=0;
+	// 	fMaxGiniRight=0;
+	// 	fMaxThreshold=0;
+	// 	fMaxSamplesOnLeft=0;
+	// 	for(j=0;j<classNum;++j)
+	// 	{
+	// 		fMaxProbsLeft[j]=0;
+	// 		fMaxProbsRight[j]=0;
+	// 	}
+    //     //sort samples by current feature
+	// 	sortIndex(featureId[i]);
+	// 	//initialize the probsLeft&probsRight
+	// 	for(k=0;k<classNum;++k)
+	// 	{
+	// 		probsLeft[k]=0;
+	// 		probsRight[k]=0;
+	// 	}
+	// 	memcpy(probsRight,_probs,sizeof(float)*classNum);
+	// 	for(j=0;j<sampleNum-1;++j)
+	// 	{
+	// 		giniLeft=0;
+	// 		giniRight=0;
+	// 		infoGain=0;
+	// 		probsLeft[static_cast<int>(labels[sampleId[j]])]++;
+	// 		probsRight[static_cast<int>(labels[sampleId[j]])]--;
+    //         //do not do calculation if the nearby samples' feature are too similar(<0.000001)
+	// 		if((data[sampleId[j+1]][featureId[i]]-data[sampleId[j]][featureId[i]])<0.000001)
+	// 		{continue;}
+	// 		for(k=0;k<classNum;++k)
+	// 		{
+	// 			float p=probsLeft[k]/(j+1);
+	// 			giniLeft+=(p*p);
+	// 		}
+	// 		giniLeft=1-giniLeft;
+	// 		for(k=0;k<classNum;++k)
+	// 		{
+	// 			float p=probsRight[k]/(sampleNum-j-1);
+	// 			giniRight+=(p*p);
+	// 		}
+	// 		giniRight=1-giniRight;
+	// 		float leftRatio=(j+1.0)/sampleNum;
+	// 		float rightRatio=(sampleNum-j-1.0)/sampleNum;
+	// 		infoGain=_gini-leftRatio*giniLeft-rightRatio*giniRight;
+	// 		if(infoGain>fMaxinfoGain)
+	// 		{
+	// 			fMaxinfoGain=infoGain;
+	// 			fMaxGiniLeft=giniLeft;
+	// 			fMaxGiniRight=giniRight;
+	// 			fMaxThreshold=(data[sampleId[j]][featureId[i]]+data[sampleId[j+1]][featureId[i]])/2;
+	// 			fMaxSamplesOnLeft=j;
+	// 			memcpy(fMaxProbsLeft,probsLeft,sizeof(float)*classNum);
+	// 			memcpy(fMaxProbsRight,probsRight,sizeof(float)*classNum);
+	// 		}
+	// 	}
+	// 	if(fMaxinfoGain>maxInfoGain)
+	// 	{
+	// 		maxInfoGain=fMaxinfoGain;
+	// 		maxGiniLeft=fMaxGiniLeft;
+	// 		maxGiniRight=fMaxGiniRight;
+	// 		maxFeatureId=fMaxFeatureId;
+	// 		maxThreshold=fMaxThreshold;
+	// 		maxSamplesOnLeft=fMaxSamplesOnLeft;
+	// 		memcpy(maxProbsLeft,fMaxProbsLeft,sizeof(float)*classNum);
+	// 		memcpy(maxProbsRight,fMaxProbsRight,sizeof(float)*classNum);
+	// 	}
+	// }
+	// sortIndex(maxFeatureId);
+	// if(maxInfoGain<minInfoGain)
+	// {createLeaf();}
+	// else
+	// {
+	// 	_featureIndex=maxFeatureId;
+	// 	_threshold=maxThreshold;
+	// 	nodeArray[id*2+1]=new ClasNode();
+	// 	nodeArray[id*2+2]=new ClasNode();
+	// 	((ClasNode*)nodeArray[id*2+1])->_gini=maxGiniLeft;
+	// 	((ClasNode*)nodeArray[id*2+1])->_probs=maxProbsLeft;
+	// 	((ClasNode*)nodeArray[id*2+2])->_gini=maxGiniRight;
+	// 	((ClasNode*)nodeArray[id*2+2])->_probs=maxProbsRight;
+	// 	//assign samples to left and right
+	// 	Sample*leftSamples=new Sample(_samples,0,maxSamplesOnLeft);
+	// 	Sample*rightSamples=new Sample(_samples,maxSamplesOnLeft+1,sampleNum-1);
+	// 	nodeArray[id*2+1]->_samples=leftSamples;
+	// 	nodeArray[id*2+2]->_samples=rightSamples;
+	// }
+	// delete[] _probs;
+	// _probs=NULL;
+	// delete[] fMaxProbsLeft;
+	// delete[] fMaxProbsRight;
+	// delete[] probsLeft;
+	// delete[] probsRight;
 }
 
 void ClasNode::createLeaf()

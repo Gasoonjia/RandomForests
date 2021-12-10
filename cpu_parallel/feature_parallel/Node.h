@@ -33,6 +33,7 @@ public:
 	virtual ~Node();
 	//sort the selected samples in the ascending order based on featureId
 	void sortIndex(int featureId);
+	int* sortIndex2(int featureId);
 	Sample*_samples;//the samples hold by this node
 	//set this node as leaf node
 	inline void setLeaf(bool flag){_isLeaf=flag;};
